@@ -14,16 +14,18 @@ import (
 
 // Item is an object that can be dropped on the planet ground
 type Item struct {
-	ID int `json:"id,omitempty"`
-	X  int `json:"x,omitempty"`
-	Y  int `json:"y,omitempty"`
+	ID    string  `json:"id,omitempty"`
+	Kind  string  `json:"kind,omitempty"` // the object type
+	Angle float32 `json:"angle"`
+	Y     int     `json:"y"`
 }
 
 // Action represents a player action, like dropping an object on the ground, or triggering an earthquake
 type Action struct {
-	ID int `json:"id,omitempty"`
-	X  int `json:"x,omitempty"`
-	Y  int `json:"y,omitempty"`
+	Type  string  `json:"type,omitempty"`  // the action type
+	Extra string  `json:"extra,omitempty"` // extra info about the action; by example the type of object to drop
+	Angle float32 `json:"angle"`
+	Y     int     `json:"y"`
 }
 
 var items = make([]Item, 0, 1000)
@@ -43,19 +45,25 @@ func receiveActions(ws *websocket.Conn) {
 		action := new(Action)
 		decodingErr := json.Unmarshal([]byte(msg), &action)
 		if decodingErr == nil {
-
-			item := Item{
-				action.ID,
-				action.X,
-				action.Y,
+			switch action.Type {
+			case "drop":
+				createItem(action)
 			}
-
-			items = append(items, item)
 
 		} else {
 			fmt.Println(decodingErr)
 		}
 	}
+}
+
+func createItem(action *Action) {
+	item := Item{
+		"XYZ",
+		action.Extra,
+		action.Angle,
+		action.Y,
+	}
+	items = append(items, item)
 }
 
 func sendState(ws *websocket.Conn) {
