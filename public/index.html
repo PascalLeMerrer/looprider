@@ -51,10 +51,6 @@
         setInterval(function() {
 
             index = Math.round(Math.random() * items.length)
-            console.log("index: " + index)
-            console.log("items.length: " + items.length)
-            console.log("items[index]: ")
-            console.log(items[index])
             if(items[index] !== undefined) {
                 var action = {
                     type: "destroy",
