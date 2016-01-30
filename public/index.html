@@ -10,6 +10,7 @@
 <script>
         var loc = window.location;
         var uri = 'ws:';
+        var items;
 
         var index = 1;
 
@@ -28,6 +29,7 @@
         ws.onmessage = function(evt) {
             var out = document.getElementById('output');
             out.innerHTML += evt.data + '<br>';
+            items = JSON.parse(evt.data)
         }
 
         var action = {
@@ -44,7 +46,24 @@
             if(index > 2) {
                 index = 1
             }
-        }, 1000);
+        }, 2000);
+
+        setInterval(function() {
+
+            index = Math.round(Math.random() * items.length)
+            console.log("index: " + index)
+            console.log("items.length: " + items.length)
+            console.log("items[index]: ")
+            console.log(items[index])
+            if(items[index] !== undefined) {
+                var action = {
+                    type: "destroy",
+                    extra: items[index].id
+                }
+                ws.send(JSON.stringify(action));
+            }
+
+        }, 3000);
 
 </script>
 </body>

@@ -55,6 +55,8 @@ func receiveActions(ws *websocket.Conn) {
 			switch action.Type {
 			case "drop":
 				createItem(action)
+			case "destroy":
+				destroyItem(action)
 			}
 
 		} else {
@@ -71,6 +73,14 @@ func createItem(action *Action) {
 		action.Y,
 	}
 	items = append(items, item)
+}
+
+func destroyItem(action *Action) {
+	for index, item := range items {
+		if item.ID == action.Extra {
+			items = append(items[:index], items[index+1:]...)
+		}
+	}
 }
 
 func sendState(ws *websocket.Conn) {
