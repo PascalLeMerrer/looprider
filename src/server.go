@@ -2,6 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"math/rand"
+	"strconv"
+
+	"github.com/speps/go-hashids"
 
 	"encoding/json"
 
@@ -42,6 +47,7 @@ func receiveActions(ws *websocket.Conn) {
 		}
 
 		fmt.Println(msg)
+
 		action := new(Action)
 		decodingErr := json.Unmarshal([]byte(msg), &action)
 		if decodingErr == nil {
@@ -58,7 +64,7 @@ func receiveActions(ws *websocket.Conn) {
 
 func createItem(action *Action) {
 	item := Item{
-		"XYZ",
+		generateID(),
 		action.Extra,
 		action.Angle,
 		action.Y,
@@ -73,6 +79,52 @@ func sendState(ws *websocket.Conn) {
 		fmt.Println(sendError)
 		return
 	}
+}
+
+// returns an 8 characters random string
+// the characters may be any of [A-Z][a-z][0-9]
+func generateID() string {
+	hashIDConfig := hashids.NewData()
+	hashIDConfig.Salt = "zs4e6f80KDla1-2xcCD!34%<?23POsd"
+	hashIDConfig.MinLength = 8
+	hashIDConfig.Alphabet = hashids.DefaultAlphabet
+	hash := hashids.NewWithData(hashIDConfig)
+
+	randomInt := rand.New(rand.NewSource(time.Now().UnixNano())).Int63()
+	intArray := intToIntArray(randomInt, 8)
+	result, _ := hash.Encode(intArray)
+
+	return result
+}
+
+// converts an int64 number to a fixed length array of int
+func intToIntArray(value int64, length int) []int {
+	result := make([]int, length)
+	valueAsString := strconv.FormatInt(value, 10)
+
+	fragmentLength := len(valueAsString) / length
+
+	var startIndex, endIndex int
+	var intValue int64
+	var err error
+
+	for index := 0; index < length; index++ {
+
+		startIndex = index * fragmentLength
+		endIndex = ((index + 1) * fragmentLength)
+
+		if endIndex <= len(valueAsString) {
+			intValue, err = strconv.ParseInt(valueAsString[startIndex:endIndex], 10, 0)
+		} else {
+			intValue, err = strconv.ParseInt(valueAsString[startIndex:], 10, 0)
+		}
+
+		if err != nil {
+			log.Panicf("Error while converting string to int array %s", err)
+		}
+		result[index] = int(intValue)
+	}
+	return result
 }
 
 func main() {
