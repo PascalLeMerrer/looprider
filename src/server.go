@@ -9,8 +9,6 @@ import (
 
 	"github.com/speps/go-hashids"
 
-	"encoding/json"
-
 	"time"
 
 	"github.com/labstack/echo"
@@ -23,46 +21,56 @@ type Item struct {
 	ID    string  `json:"id,omitempty"`
 	Kind  string  `json:"kind,omitempty"` // the object type
 	Angle float64 `json:"angle"`
-	Y     int     `json:"y"`
+	Y     float64 `json:"y"`
 }
 
 // Action represents a player action, like dropping an object on the ground, or triggering an earthquake
 type Action struct {
-	Type  string  `json:"type,omitempty"`  // the action type
-	Extra string  `json:"extra,omitempty"` // extra info about the action; by example the type of object to drop
+	Type  string  `json:"action,omitempty"` // the action type
+	Extra string  `json:"extra,omitempty"`  // extra info about the action; by example the type of object to drop
 	Angle float64 `json:"angle"`
-	Y     int     `json:"y"`
+	Y     float64 `json:"y"`
 }
 
-var items = make([]Item, 0, 1000)
+var items []Item
+var running bool // is the game in progress?
 
-func receiveActions(ws *websocket.Conn) {
-	msg := ""
-
+func receiveActions(ws *websocket.Conn) error {
+	var err error
 	for {
 
-		err := websocket.Message.Receive(ws, &msg)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		fmt.Println(msg)
-
 		action := new(Action)
-		decodingErr := json.Unmarshal([]byte(msg), &action)
-		if decodingErr == nil {
-			switch action.Type {
-			case "drop":
-				createItem(action)
-			case "destroy":
-				destroyItem(action)
-			}
-
-		} else {
-			fmt.Println(decodingErr)
+		err = websocket.JSON.Receive(ws, &action)
+		if err != nil {
+			fmt.Printf("Receive error: %s\n", err)
+			break
 		}
+
+		fmt.Printf("Received %+v\n", action)
+
+		switch action.Type {
+		case "start":
+			start()
+		case "stop":
+			stop()
+		case "drop":
+			createItem(action)
+		case "destroy":
+			destroyItem(action)
+		}
+
 	}
+	ws.Close()
+	return err
+}
+
+func stop() {
+	running = false
+}
+
+func start() {
+	items = make([]Item, 0, 1000)
+	running = true
 }
 
 func createItem(action *Action) {
@@ -83,13 +91,13 @@ func destroyItem(action *Action) {
 	}
 }
 
-func sendState(ws *websocket.Conn) {
-	jsonBytes, _ := json.Marshal(items)
-	sendError := websocket.Message.Send(ws, string(jsonBytes))
+func sendState(ws *websocket.Conn) error {
+	sendError := websocket.JSON.Send(ws, items)
 	if sendError != nil {
-		fmt.Println(sendError)
-		return
+		fmt.Printf("SendState error: %s\n", sendError)
+		return sendError
 	}
+	return nil
 }
 
 // returns an 8 characters random string
@@ -131,7 +139,7 @@ func intToIntArray(value int64, length int) []int {
 		}
 
 		if err != nil {
-			log.Panicf("Error while converting string to int array %s", err)
+			log.Panicf("Error while converting string to int array %s\n", err)
 		}
 		result[index] = int(intValue)
 	}
@@ -156,13 +164,22 @@ func main() {
 
 	e.Static("/", "public")
 	e.WebSocket("/ws", func(c *echo.Context) (err error) {
+		fmt.Println("Creating a new websocket")
 		ws := c.Socket()
+
 		go receiveActions(ws)
 		for {
-			animate(speed)
-			sendState(ws)
-			time.Sleep(time.Millisecond * 100)
+			if running {
+				animate(speed)
+				err := sendState(ws)
+				if err != nil {
+					break
+				}
+				time.Sleep(time.Millisecond * 100)
+			}
 		}
+		fmt.Println("Exited loop")
+		return err
 	})
 
 	e.Run(":1323")
