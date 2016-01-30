@@ -26,6 +26,8 @@ type Action struct {
 	Y  int `json:"y,omitempty"`
 }
 
+var items = make([]Item, 0, 1000)
+
 func receiveActions(ws *websocket.Conn) {
 	msg := ""
 
@@ -41,21 +43,15 @@ func receiveActions(ws *websocket.Conn) {
 		action := new(Action)
 		decodingErr := json.Unmarshal([]byte(msg), &action)
 		if decodingErr == nil {
-			switch action.ID {
-			case 1:
-				fmt.Println("action 1")
 
-			case 2:
-				fmt.Println("action 2")
+			item := Item{
+				action.ID,
+				action.X,
+				action.Y,
 			}
 
-			jsonBytes, _ := json.Marshal(action)
+			items = append(items, item)
 
-			sendError := websocket.Message.Send(ws, string(jsonBytes))
-			if sendError != nil {
-				fmt.Println(sendError)
-				return
-			}
 		} else {
 			fmt.Println(decodingErr)
 		}
@@ -63,14 +59,7 @@ func receiveActions(ws *websocket.Conn) {
 }
 
 func sendState(ws *websocket.Conn) {
-	item := Item{
-		1,
-		20,
-		30,
-	}
-
-	jsonBytes, _ := json.Marshal(item)
-
+	jsonBytes, _ := json.Marshal(items)
 	sendError := websocket.Message.Send(ws, string(jsonBytes))
 	if sendError != nil {
 		fmt.Println(sendError)
@@ -80,8 +69,6 @@ func sendState(ws *websocket.Conn) {
 
 func main() {
 	// speed := 0
-
-	// var items = make([]Item, 0, 1000)
 
 	e := echo.New()
 
