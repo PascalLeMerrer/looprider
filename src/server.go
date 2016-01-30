@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"strconv"
 
@@ -21,7 +22,7 @@ import (
 type Item struct {
 	ID    string  `json:"id,omitempty"`
 	Kind  string  `json:"kind,omitempty"` // the object type
-	Angle float32 `json:"angle"`
+	Angle float64 `json:"angle"`
 	Y     int     `json:"y"`
 }
 
@@ -29,7 +30,7 @@ type Item struct {
 type Action struct {
 	Type  string  `json:"type,omitempty"`  // the action type
 	Extra string  `json:"extra,omitempty"` // extra info about the action; by example the type of object to drop
-	Angle float32 `json:"angle"`
+	Angle float64 `json:"angle"`
 	Y     int     `json:"y"`
 }
 
@@ -127,8 +128,16 @@ func intToIntArray(value int64, length int) []int {
 	return result
 }
 
+// update the position of items according to angular speed
+func animate(speed float64) {
+	count := len(items)
+	for i := 0; i < count; i++ {
+		items[i].Angle = math.Mod(items[i].Angle+speed, 360)
+	}
+}
+
 func main() {
-	// speed := 0
+	speed := 1.44
 
 	e := echo.New()
 
@@ -140,6 +149,7 @@ func main() {
 		ws := c.Socket()
 		go receiveActions(ws)
 		for {
+			animate(speed)
 			sendState(ws)
 			time.Sleep(time.Millisecond * 100)
 		}
