@@ -11,6 +11,8 @@
         var loc = window.location;
         var uri = 'ws:';
         var items;
+        var dropperId;
+        var deleterId;
 
         var index = 1;
 
@@ -24,6 +26,20 @@
 
         ws.onopen = function() {
             console.log('Connected')
+            var action = {
+                action: "start"
+            }
+            ws.send(JSON.stringify(action));
+
+            setTimeout(function() {
+                // stop the game after 10 seconds
+                var action = {
+                    action: "stop"
+                }
+                ws.send(JSON.stringify(action));
+                clearInterval(dropperId)
+                clearInterval(deleterId)
+            }, 10000)
         }
 
         ws.onmessage = function(evt) {
@@ -32,33 +48,28 @@
             items = JSON.parse(evt.data)
         }
 
-        var action = {
-            type: "drop",
-            extra: "banana",
-            angle: 20,
-            y: 0
-        }
 
-        setInterval(function() {
-            action.id = index;
-            ws.send(JSON.stringify(action));
-            index++;
-            if(index > 2) {
-                index = 1
+        dropperId = setInterval(function() {
+            // drop a banana every two seconds
+            var action = {
+                action: "drop",
+                extra: "banana",
+                angle: 20,
+                y: 0
             }
+            ws.send(JSON.stringify(action));
         }, 2000);
 
-        setInterval(function() {
-
+        deleterId = setInterval(function() {
+            // delete a random item, every 3 seconds
             index = Math.round(Math.random() * items.length)
             if(items[index] !== undefined) {
                 var action = {
-                    type: "destroy",
+                    action: "destroy",
                     extra: items[index].id
                 }
                 ws.send(JSON.stringify(action));
             }
-
         }, 3000);
 
 </script>
