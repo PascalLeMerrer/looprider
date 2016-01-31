@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -36,11 +37,13 @@ type Player struct {
 	ID              string  `json:"id"`
 	InitialPosition float64 `json:"initialPosition"`
 	lastPing        time.Time
+	socket          *websocket.Conn
 }
 
 var items []Item
 var running bool // is the game in progress?
 var players []*Player
+var sockets []*websocket.Conn
 
 // TimeOutMilis is the max time between two reception of a keep alive message from a given client
 const TimeOutMilis = 2000
@@ -60,9 +63,11 @@ func receiveActions(ws *websocket.Conn) error {
 
 		switch action.Type {
 		case "join":
-			join(action)
+			join(ws, action)
 		case "start":
-			start(ws)
+			if err := start(); err != nil {
+				fmt.Println(err)
+			}
 		case "stop":
 			stop()
 		case "drop":
@@ -83,7 +88,7 @@ func stop() {
 }
 
 // invoked when a new player joins the game
-func join(action *Action) {
+func join(ws *websocket.Conn, action *Action) {
 	if action.Extra == "" {
 		fmt.Println("Missing player nickname in extra parameter of connect action.")
 		return
@@ -92,6 +97,7 @@ func join(action *Action) {
 		action.Extra,
 		0,
 		time.Now(),
+		ws,
 	}
 	players = append(players, &player)
 	fmt.Printf("Player %s joined the game\n", player.ID)
@@ -106,21 +112,19 @@ func keepAlive(action *Action) {
 	for _, player := range players {
 		if player.ID == action.Extra {
 			player.lastPing = time.Now()
-			fmt.Printf("player %v lastPing updated to %v \n", player.ID, player.lastPing)
 		}
-
 	}
-	removeDisconnectedPlayers()
 }
 
 func removeDisconnectedPlayers() {
 	now := time.Now()
 	for i, player := range players {
-		fmt.Println(now.Sub(player.lastPing) / 1000)
 		if now.Sub(player.lastPing) > TimeOutMilis*time.Millisecond {
-			fmt.Printf("kicking %s lastPing is %v \n", player.ID, player.lastPing)
+			fmt.Printf("kicking playing %s, inactive since %v \n", player.ID, player.lastPing)
+			removeSocket(player.socket)
 			if len(players) > 1 {
 				players = append(players[:i], players[i+1:]...)
+
 			} else {
 				players = make([]*Player, 0)
 			}
@@ -128,47 +132,53 @@ func removeDisconnectedPlayers() {
 	}
 }
 
+func removeSocket(ws *websocket.Conn) {
+	for index, socket := range sockets {
+		if socket == ws {
+			socket.Close()
+			if len(sockets) > 1 {
+				sockets = append(sockets[:index], sockets[index+1:]...)
+			} else {
+				sockets = make([]*websocket.Conn, 0)
+			}
+		}
+	}
+}
+
 // removes the disconnected players from the player list
-// func removeDisconnected(activePlayers *[]Player) {
-// var newPlayers []Player
-// for {
-// 	now := time.Now()
-// 	for i, player := range *activePlayers {
-// 		fmt.Printf("player %v lastPing %v \n", player.ID, player.lastPing)
-// 		fmt.Printf("now is %v\n", now)
-// 		fmt.Printf("diff is  %v \n", now.Sub(player.lastPing))
-// 		if now.Sub(player.lastPing) > TimeOutMilis*time.Millisecond {
-// 			fmt.Printf("kicking %s\n", player.ID)
-// 			if len(*activePlayers) > 1 {
-// 				newPlayers = append((*activePlayers)[:i], (*activePlayers)[i+1:]...)
-// 				activePlayers = &newPlayers
-// 			} else {
-// 				newPlayers = make([]Player, 0)
-// 				activePlayers = &newPlayers
-// 			}
-// 		}
-// 	}
-// 	time.Sleep(time.Millisecond * 500)
-// }
-// }
+func clean() {
+	for {
+		removeDisconnectedPlayers()
+		time.Sleep(time.Millisecond * 500)
+	}
+}
 
 // starts a new game
 // the inital position of players is computed then sent to client
-func start(ws *websocket.Conn) error {
+func start() error {
+	items = make([]Item, 0, 1000)
+
 	removeDisconnectedPlayers()
 	count := len(players)
+
+	if count == 0 {
+		return errors.New("ERROR: no player joined the game, cannot start")
+	}
+
 	angleBetweenPlayers := 360 / count
 	for i, player := range players {
 		player.InitialPosition = float64(i * angleBetweenPlayers)
 	}
 
-	sendError := websocket.JSON.Send(ws, players)
-	if sendError != nil {
-		fmt.Printf("Sending Initial State caused an error: %s\n", sendError)
-		return sendError
+	for _, ws := range sockets {
+		sendError := websocket.JSON.Send(ws, players)
+		if sendError != nil {
+			fmt.Printf("Sending Initial State caused an error: %s\n", sendError)
+			return sendError
+		}
 	}
 
-	items = make([]Item, 0, 1000)
+	go clean()
 
 	running = true
 	return nil
@@ -250,7 +260,7 @@ func intToIntArray(value int64, length int) []int {
 }
 
 func main() {
-
+	fmt.Println("Server starting, please wait...")
 	e := echo.New()
 
 	e.Use(mw.Logger())
@@ -260,6 +270,7 @@ func main() {
 	e.WebSocket("/ws", func(c *echo.Context) (err error) {
 		fmt.Println("Creating a new websocket")
 		ws := c.Socket()
+		sockets = append(sockets, ws)
 
 		go receiveActions(ws)
 		for {
@@ -275,7 +286,7 @@ func main() {
 		return err
 	})
 
-	// go removeDisconnected(&players)
-
+	fmt.Println("Server starting, will listen on port 1323")
 	e.Run(":1323")
+
 }

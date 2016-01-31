@@ -29,8 +29,7 @@ function submitForm() {
     if (loc.protocol === 'https:') {
         uri = 'wss:';
     }
-    uri += '//' + loc.host;
-    uri += loc.pathname + 'ws';
+    uri += '//' + loc.host +'/ws';
 
     ws = new WebSocket(uri)
 
@@ -48,10 +47,6 @@ function submitForm() {
         ws.send(JSON.stringify(action));
 
         console.log('Joined')
-        var action = {
-            action: "start"
-        }
-        ws.send(JSON.stringify(action));
 
         setTimeout(function() {
             // stop the game after a given duration
@@ -97,7 +92,7 @@ function submitForm() {
     }, 2000);
 
     deleterId = setInterval(function() {
-        if(!items) {
+                if(!items) {
             return
         }
         // delete a random item, every 3 seconds
