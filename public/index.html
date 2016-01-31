@@ -6,72 +6,110 @@
 </head>
 <body>
 <p id="output"></p>
-
 <script>
-        var loc = window.location;
-        var uri = 'ws:';
-        var items;
-        var dropperId;
-        var deleterId;
+function entered(e) {
+    console.log(e.keyCode)
+    e.preventDefault();
+    if(e.keyCode == 13) {
+        submitForm();     
+    }
+} 
 
-        var index = 1;
+function submitForm() {
+    
+    var loc = window.location;
+    var uri = 'ws:';
+    var items;
+    var dropperId;
+    var deleterId;
+    var pingerId;
+    var nickname = "";
+    var index = 1;
 
-        if (loc.protocol === 'https:') {
-            uri = 'wss:';
+    if (loc.protocol === 'https:') {
+        uri = 'wss:';
+    }
+    uri += '//' + loc.host;
+    uri += loc.pathname + 'ws';
+
+    ws = new WebSocket(uri)
+
+    ws.onopen = function() {
+
+        nickname = document.getElementById("nickname").value
+        if(nickname == undefined || nickname == "") {
+            alert("Please enter a nickname");
+            return
         }
-        uri += '//' + loc.host;
-        uri += loc.pathname + 'ws';
+        var action = {
+            action: "join",
+            extra: nickname
+        }
+        ws.send(JSON.stringify(action));
 
-        ws = new WebSocket(uri)
+        console.log('Joined')
+        var action = {
+            action: "start"
+        }
+        ws.send(JSON.stringify(action));
 
-        ws.onopen = function() {
-            console.log('Connected')
+        setTimeout(function() {
+            // stop the game after a given duration
             var action = {
-                action: "start"
+                action: "stop"
             }
             ws.send(JSON.stringify(action));
+            clearInterval(dropperId)
+            clearInterval(deleterId)
+            clearInterval(pingerId)
+        }, 5000)
 
-            setTimeout(function() {
-                // stop the game after 10 seconds
-                var action = {
-                    action: "stop"
-                }
-                ws.send(JSON.stringify(action));
-                clearInterval(dropperId)
-                clearInterval(deleterId)
-            }, 10000)
-        }
-
-        ws.onmessage = function(evt) {
-            var out = document.getElementById('output');
-            out.innerHTML += evt.data + '<br>';
-            items = JSON.parse(evt.data)
-        }
-
-
-        dropperId = setInterval(function() {
-            // drop a banana every two seconds
+        // send keepAlive
+        pingerId = setInterval(function() {
+            // stop the game after a given duration
             var action = {
-                action: "drop",
-                extra: "banana",
-                angle: 20,
-                y: 0
+                action: "keepAlive",
+                extra: nickname
             }
             ws.send(JSON.stringify(action));
-        }, 2000);
+        }, 1000)
+    }
 
-        deleterId = setInterval(function() {
-            // delete a random item, every 3 seconds
-            index = Math.round(Math.random() * items.length)
-            if(items[index] !== undefined) {
-                var action = {
-                    action: "destroy",
-                    extra: items[index].id
-                }
-                ws.send(JSON.stringify(action));
+    ws.onmessage = function(evt) {
+        var out = document.getElementById('output');
+        out.innerHTML += evt.data + '<br>';
+        items = JSON.parse(evt.data)
+    }
+
+
+    dropperId = setInterval(function() {
+        // drop a banana every two seconds
+        var action = {
+            action: "drop",
+            extra: "banana",
+            angle: 20,
+            y: 0
+        }
+        ws.send(JSON.stringify(action));
+    }, 2000);
+
+    deleterId = setInterval(function() {
+        // delete a random item, every 3 seconds
+        index = Math.round(Math.random() * items.length)
+        if(items[index] !== undefined) {
+            var action = {
+                action: "destroy",
+                extra: items[index].id
             }
-        }, 3000);
-
+            ws.send(JSON.stringify(action));
+        }
+    }, 3000);
+}
 </script>
+<form action="#">
+    Your nickname: 
+    <input type="text" id="nickname" onkeyup="entered(event)">   
+</form>
+
 </body>
 </html>
