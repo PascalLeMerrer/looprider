@@ -220,7 +220,7 @@ func generateID() string {
 	hashIDConfig.Salt = "zs4e6f80KDla1-2xcCD!34%<?23POsd"
 	hashIDConfig.MinLength = 8
 	hashIDConfig.Alphabet = hashids.DefaultAlphabet
-	hash := hashids.NewWithData(hashIDConfig)
+	hash, _ := hashids.NewWithData(hashIDConfig)
 
 	randomInt := rand.New(rand.NewSource(time.Now().UnixNano())).Int63()
 	intArray := intToIntArray(randomInt, 8)
@@ -259,19 +259,13 @@ func intToIntArray(value int64, length int) []int {
 	return result
 }
 
-func main() {
-	fmt.Println("Server starting, please wait...")
-	e := echo.New()
 
-	e.Use(mw.Logger())
-	e.Use(mw.Recover())
+func hello(c echo.Context) error {
+	websocket.Handler(func(ws *websocket.Conn) {
+		defer ws.Close()
 
-	e.Static("/", "public")
-	e.WebSocket("/ws", func(c *echo.Context) (err error) {
 		fmt.Println("Creating a new websocket")
-		ws := c.Socket()
 		sockets = append(sockets, ws)
-
 		go receiveActions(ws)
 		for {
 			if running {
@@ -282,11 +276,21 @@ func main() {
 				time.Sleep(time.Millisecond * 100)
 			}
 		}
-		fmt.Println("Exited loop")
-		return err
-	})
+	}).ServeHTTP(c.Response(), c.Request())
+	return nil
+}
 
-	fmt.Println("Server starting, will listen on port 1323")
-	e.Run(":1323")
+
+func main() {
+	e := echo.New()
+	e.Logger.Info("Server starting, will listen on port 1323")
+
+	e.Use(mw.Logger())
+	e.Use(mw.Recover())
+
+	e.Static("/", "public")
+	e.GET("/ws", hello)
+
+	e.Logger.Fatal(e.Start(":1323"))
 
 }
